@@ -782,6 +782,7 @@ function page:updateDropdown(dropdownInstance: Frame, list, callback)
   end
 end
 
+
 function page:addSlider(data: SliderType)
   local callback = typeof(data.callback) == "function" and data.callback or function (v)end;
   local min, max, default = typeof(data.min) == "number" and data.min or 0, typeof(data.max) == "number" and data.max or 10, typeof(data.default) == "number" and data.default or 0;
