@@ -22,6 +22,7 @@ local inputEnded = {};
 local Debug = {
   log = {}
 }
+local binds = {};
 
 local library_codes = {
   MODULE_UNKNOWN_TITLE = "Unknown",
@@ -48,6 +49,9 @@ local Vector2 = Vector2.new;
 local themes = {
   ModuleBackground = _Color3(30, 30, 30),
   MoudleBorderColor = _Color3(25, 25, 25),
+  MODULE_DEFAULT_SIZE = UDim2(1, -60, 0, 60),
+  ModuleButtonColor = _Color3(45, 45, 45),
+  ModuelButtonFocused = _Color3(55, 55, 55),
 };
 
 function Tween(data: TweenProps): Tween
@@ -167,7 +171,7 @@ function map(t: table, callback)
   return t;
 end
 
-function createShadow(parent, color: Color3)
+function createShadow(parent, color: Color3?)
   return CreateInstance("ImageLabel", {
     Parent = parent,
     BackgroundTransparency = 1.000,
@@ -266,6 +270,13 @@ function library.new(data: LibraryProps)
   Draggable(Header, Container);
 
   -- input init.
+  UserInputService.InputBegan:Connect(function(key)
+    if (binds[key.KeyCode]) then
+      for _, v in pairs (binds[key.KeyCode]) do
+        v();
+      end
+    end
+  end)
 
   UserInputService.InputEnded:Connect(function(key)
       if (key.UserInputType == Enum.UserInputType.MouseButton1) then
@@ -289,6 +300,33 @@ function library.new(data: LibraryProps)
     Container = Container,
     pages = {},
   }, library);
+end
+
+function registerKeyCallback(key: InputObject, callback: any)
+  binds[key.KeyCode] = binds[key.KeyCode] or {};
+
+  table.insert(binds[key.KeyCode], callback);
+
+  return {
+    reset = function()
+      for i,v in pairs(binds[key.KeyCode]) do
+        if (v == callback) then
+          table.remove(binds[key.KeyCode], i);
+        end
+      end
+    end
+  }
+end
+
+function keyDetector()
+  local key = UserInputService.InputBegan:Wait();
+
+  while (key.UserInputType ~= Enum.UserInputType.Keyboard) do
+      key = UserInputService.InputBegan:Wait();
+  end
+  RunService.RenderStepped:Wait();
+
+  return key;
 end
 
 function page.new(data: PageProps)
@@ -413,8 +451,8 @@ function library:selectPage(page, enable: boolean)
   end
 end
 
-function page:Resize(doScroll: boolean, padding: number?)
-  local size = self.page.UIListLayout.AbsoluteContentSize.Y + (padding or 0);
+function page:Resize(doScroll: boolean)
+  local size = self.page.UIListLayout.AbsoluteContentSize.Y + 10;
   self.page.CanvasSize = UDim2(0, 0, 0, size);
 
   if (doScroll and self.lastPosition) then
@@ -486,12 +524,18 @@ type SliderType = {
   default: number?;
   min: number;
   max: number;
-}
+};
 type ColorpickerType = {
   title: string?;
   desc: string?;
   callback: any?;
   default: Color3?;
+};
+type KeybindType = {
+  title: string?;
+  desc: string?;
+  callback: any?;
+  default: Enum.KeyCode;
 };
 
 function page:addButton(data: ButtonType)
@@ -514,7 +558,7 @@ function page:addButton(data: ButtonType)
   }, {
     CreateInstance("TextButton", {
       AnchorPoint = Vector2(0.5, 0.5),
-      BackgroundColor3 = _Color3(45, 45, 45),
+      BackgroundColor3 = themes.ModuleButtonColor,
       BorderSizePixel = 0,
       Position = UDim2(0.5, 0, 0.75, 0),
       Size = UDim2(0.9, 0, 0, 30),
@@ -534,11 +578,11 @@ function page:addButton(data: ButtonType)
   local textbutton: TextButton = button.TextButton;
 
   textbutton.MouseButton1Down:Connect(function()
-    textbutton.BackgroundColor3 = _Color3(55, 55, 55);
+    textbutton.BackgroundColor3 = themes.ModuelButtonFocused;
   end)
 
   textbutton.MouseButton1Up:Connect(function()
-    textbutton.BackgroundColor3 = _Color3(45, 45, 45);
+    textbutton.BackgroundColor3 = themes.ModuleButtonColor;
     callback();
   end)
 end
@@ -759,6 +803,7 @@ function page:updateDropdown(dropdownInstance: Frame, list, callback)
       button.MouseButton1Up:Connect(function()
         removeShadow(button)
         callback(Value);
+        dropdownInstance.Inner.f.TextBox.Text = Value;
         self:updateDropdown(dropdownInstance, nil, callback);
       end)
     end
@@ -782,6 +827,7 @@ function page:updateDropdown(dropdownInstance: Frame, list, callback)
   end
 end
 
+
 function page:addSlider(data: SliderType)
   local callback = typeof(data.callback) == "function" and data.callback or function (v)end;
   local min, max, default = typeof(data.min) == "number" and data.min or 0, typeof(data.max) == "number" and data.max or 10, typeof(data.default) == "number" and data.default or 0;
@@ -796,7 +842,7 @@ function page:addSlider(data: SliderType)
     self:createModuleHeader({ title = data.title, description = data.desc }),
     CreateInstance("TextButton", {
       AnchorPoint = Vector2(0.5, 0),
-      BackgroundColor3 = _Color3(45, 45, 45),
+      BackgroundColor3 = themes.ModuleButtonColor,
       Position = UDim2(0.5, 0, 0.75, 0),
       Size = UDim2(1, -20, 0, 15),
       Text = "",
@@ -903,7 +949,11 @@ function page:addColorpicker(data: ColorpickerType)
 
     local defaultSize = UDim2(0, 250, 0, 226);
     local container: Frame = popupParent.Container;
-    local position = UDim2(0, container.AbsolutePosition.X + container.AbsoluteSize.X + 20, 0, (container.AbsolutePosition.Y + container.AbsoluteSize.Y) / 2);
+    local x = container.AbsolutePosition.X + container.AbsoluteSize.X + defaultSize.X.Offset + 30;
+
+    x = x >= workspace.CurrentCamera.ViewportSize.X and container.AbsolutePosition.X - defaultSize.X.Offset - 30 or x;
+
+    local position = UDim2(0, x, 0.5, 0);
 
     local function createToolbarItem(text: string)
       return CreateInstance("Frame", {
@@ -1073,6 +1123,7 @@ function page:addColorpicker(data: ColorpickerType)
     });
 
     Draggable(popup.Header, popup);
+    createShadow(popup);
 
     local exit: TextButton = popup.Header.TextButton;
 
@@ -1124,10 +1175,9 @@ function page:addColorpicker(data: ColorpickerType)
 
         self:updateColorpicker(colorpicker, popup, color);
 
-        local res = HsvToRgb(unpack(color));
+        local res = HsvToRgb(color[1], color[2], color[3]);
 
-        callback(res);
-
+        callback(Color3.new(res.r, res.g, res.b));
         RunService.RenderStepped:Wait();
       end
     end)
@@ -1142,9 +1192,9 @@ function page:addColorpicker(data: ColorpickerType)
 
         color = { Y, color[2], color[3] }
 
-        local res = HsvToRgb(unpack(color));
+        local res = HsvToRgb(color[1], color[2], color[3]);
 
-        callback(res);
+        callback(Color3.new(res.r, res.g, res.b));
         RunService.RenderStepped:Wait();
       end
     end)
@@ -1195,6 +1245,56 @@ function page:updateColorpicker(mainInstance, popup, color)
       });
     end
   end
+end
+
+function page:addKeybind(data: KeybindType)
+  local keycode = typeof(data.default) == "EnumItem" and data.default or nil;
+  local callback = typeof(data.callback) == "function" and data.callback or function () end;
+  local key = nil;
+
+  local keybind = CreateInstance("Frame", {
+    Parent = self.page,
+    BackgroundColor3 = themes.ModuleBackground,
+    BorderColor3 = themes.MoudleBorderColor,
+    Size = themes.MODULE_DEFAULT_SIZE,
+  }, {
+    self:createModuleHeader({ title = data.title, description = data.desc }, { Size = UDim2(0.7, 0, 1, 0) }),
+    CreateInstance("TextButton", {
+      BackgroundColor3 = themes.ModuleButtonColor,
+      BorderSizePixel = 0,
+      AnchorPoint = Vector2(0, 0.5),
+      Position = UDim2(0.75, 0, 0.5, 0),
+      Size = UDim2(0, 100, 0, 25),
+      Font = Enum.Font.SourceSansSemibold,
+      Text = keycode and keycode.Name or "Not Binded.",
+      TextColor3 = _Color3(255, 255, 255),
+      TextSize = 17,
+    }, {
+      CreateInstance("UICorner", { CornerRadius = UDim(0, 5) }),
+    })
+  });
+
+  local button: TextButton = keybind.TextButton;
+
+  button.MouseButton1Down:Connect(function()
+    button.BackgroundColor3 = themes.ModuelButtonFocused;
+  end)
+
+  button.MouseButton1Up:Connect(function()
+    button.BackgroundColor3 = themes.ModuleButtonColor;
+
+    if (key) then
+      key:reset();
+      key = nil;
+      button.Text = "Not Binded.";
+    else
+      button.Text = "Listening...";
+      local resp = keyDetector();
+
+      button.Text = resp.KeyCode.Name;
+      key = registerKeyCallback(resp, callback);
+    end
+  end)
 end
 
 local testing = library.new({
@@ -1254,5 +1354,12 @@ tab_1:addColorpicker({
   desc = "awhiawoighaowgaowg",
   callback = function(v)
     print(v);
+  end
+})
+
+tab_1:addKeybind({
+  title = "hihihihihih",
+  callback = function()
+    print("working..");
   end
 })
