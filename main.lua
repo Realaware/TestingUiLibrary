@@ -402,8 +402,10 @@ function library:selectPage(page, enable: boolean)
       coroutine.resume(co);
 
       repeat
-        coroutine.yield();
+        task.wait();
       until coroutine.status(co) == "dead";
+
+      task.wait(.5);
     end
 
     page.page.Visible = true;

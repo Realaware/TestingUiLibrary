@@ -402,8 +402,10 @@ function library:selectPage(page, enable: boolean)
       coroutine.resume(co);
 
       repeat
-        coroutine.yield();
+        task.wait();
       until coroutine.status(co) == "dead";
+
+      task.wait(.5);
     end
 
     page.page.Visible = true;
@@ -1305,6 +1307,10 @@ local tab_1 = testing:addPage({
   title = "Hello"
 });
 
+local tab_2 = testing:addPage({
+  title = "hlhlhlhlhlh"
+})
+
 tab_1:addButton({
   title = "Kill All",
   desc = "Kill All People in game.",
@@ -1361,5 +1367,12 @@ tab_1:addKeybind({
   title = "hihihihihih",
   callback = function()
     print("working..");
+  end
+})
+
+tab_2:addButton({
+  title = "lmao",
+  callback = function()
+    print("shi tass");
   end
 })
