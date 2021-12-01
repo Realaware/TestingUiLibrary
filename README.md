@@ -24,3 +24,11 @@ library must be initialized.
 # Plans
 
 no.
+
+# ChangeLogs
+
+## 2021 / 12 / 1
+``` diff
++ setTheme Added(Buggy)
++ little change of codes.
+```
