@@ -23,6 +23,8 @@ local Debug = {
   log = {}
 }
 local binds = {};
+local objects = {};
+
 
 local library_codes = {
   MODULE_UNKNOWN_TITLE = "Unknown",
@@ -52,6 +54,9 @@ local themes = {
   MODULE_DEFAULT_SIZE = UDim2(1, -60, 0, 60),
   ModuleButtonColor = _Color3(45, 45, 45),
   ModuelButtonFocused = _Color3(55, 55, 55),
+  ModuleDescriptionColor = _Color3(140, 140, 140),
+  LibraryBodyBackgroundColor = _Color3(35, 35, 35),
+  NavigationButtonColor = _Color3(25, 25, 25),
 };
 
 function Tween(data: TweenProps): Tween
@@ -94,6 +99,28 @@ function Draggable(frame: Instance, parent: Instance)
   end)
 end
 
+function getObjectType(Instance: Instance)
+  if (Instance.ClassName == "Frame" and Instance.Name == "White" or Instance.Name == "Black") then return nil end;
+
+  if (Instance.ClassName == "Frame" and Instance.BackgroundColor3 == themes.ModuleBackground) then
+    return "ModuleBackground";
+  elseif (Instance.ClassName == "TextLabel") then
+    return Instance.TextColor3 == themes.ModuleDescriptionColor and "ModuleDesc" or "TextLabel";
+  elseif (Instance.ClassName == "Frame" or Instance.ClassName == "ScrollingFrame" and Instance.BackgroundColor3 == themes.LibraryBodyBackgroundColor) then
+    return "Body";
+  elseif (Instance.Parent and Instance.Parent.ClassName == "ScreenGui" and Instance.Name == "Container") then
+    return "Container";
+  elseif (Instance.ClassName == "TextButton") then
+    if (Instance.BackgroundColor3 == themes.ModuleButtonColor) then
+      return "Button";
+    elseif (Instance.BackgroundColor3 == themes.NavigationButtonColor) then
+      return "NavButton";
+    end
+   end
+
+  return nil;
+end
+
 function CreateInstance(instance: string, properties: table, child)
   local Instance = Instance.new(instance);
 
@@ -106,7 +133,14 @@ function CreateInstance(instance: string, properties: table, child)
   end
 
   if (instance == "TextButton") then Instance.AutoButtonColor = false end;
+  local objectType = getObjectType(Instance);
 
+  if (objectType) then
+    objects[#objects + 1] = {
+      instance = Instance,
+      type = objectType
+    }
+  end
   return Instance
 end
 
@@ -331,7 +365,7 @@ end
 
 function page.new(data: PageProps)
   local pageButton = CreateInstance("TextButton", {
-    BackgroundColor3 = _Color3(25, 25, 25),
+    BackgroundColor3 = themes.NavigationButtonColor,
     Size = UDim2(1, -20, 0, 30),
     Font = Enum.Font.SourceSansBold,
     Text = data.title or "Unknown",
@@ -344,7 +378,7 @@ function page.new(data: PageProps)
 
   local body = CreateInstance("ScrollingFrame", {
     Name = "Body",
-    BackgroundColor3 = _Color3(35, 35, 35),
+    BackgroundColor3 = themes.LibraryBodyBackgroundColor,
     BorderColor3 = _Color3(30, 30, 30),
     Position = UDim2(0.25, 5, 0, 5),
     Size = UDim2(0.75, -10, 0, 0),
@@ -383,6 +417,86 @@ function library:addPage(data: PageProps)
   return page;
 end
 
+function library:setTheme(type: string, property: string, color: Color3)
+  for i,v in pairs (objects) do
+    if (string.lower(v.type) == string.lower(type)) then
+      v.instance[property] = color;
+    end
+  end
+end
+
+--[[
+ModuleBackground
+ModuleDesc
+TextLabel
+Body
+Container
+Button
+NavButton
+]]
+
+function library:addSettingsPage()
+  if (self.Container and self.ScreenGui and self.Navigation and self.Header) then
+    local page = self:addPage({
+      title = "Settings",
+    });
+
+    page:addColorpicker({
+      title = "Body",
+      desc = "Set your library body Color.",
+      default = themes.LibraryBodyBackgroundColor,
+      callback = function(v)
+        self:setTheme("Body", "BackgroundColor3", v);
+      end
+    });
+
+    page:addColorpicker({
+      title = "Module Background",
+      desc = "Set your module background color.",
+      default = themes.ModuleBackground,
+      callback = function(v)
+        self:setTheme("ModuleBackground", "BackgroundColor3", v);
+      end
+    });
+
+    page:addColorpicker({
+      title = "Text",
+      desc = "Set your text color. (Not Module Desc)",
+      default = _Color3(255, 255, 255),
+      callback = function(v)
+        self:setTheme("TextLabel", "TextColor3", v);
+      end
+    });
+
+    page:addColorpicker({
+      title = "Module Description",
+      desc = "Set your module description text color.",
+      default = themes.ModuleDescriptionColor,
+      callback = function(v)
+        self:setTheme("ModuleDescription", "TextColor3", v);
+      end
+    });
+
+    page:addColorpicker({
+      title = "Button",
+      desc = "Set your button text color.",
+      default = themes.ModuleButtonColor,
+      callback = function(v)
+        self:setTheme("Button", "TextColor3", v);
+      end
+    });
+
+    page:addColorpicker({
+      title = "Button",
+      desc = "Set your button background color.",
+      default = themes.ModuleButtonColor,
+      callback = function(v)
+        self:setTheme("Button", "BackgroundColor3", v);
+      end
+    });
+  end
+end
+
 function library:selectPage(page, enable: boolean)
   local FocusedPage = self.FocusedPage;
 
@@ -394,18 +508,8 @@ function library:selectPage(page, enable: boolean)
     self.FocusedPage = page;
 
     if (FocusedPage) then
-
-      -- Wait until previous tab's animation.
-      local co = coroutine.create(function()
-        self:selectPage(FocusedPage, false);
-      end)
-      coroutine.resume(co);
-
-      repeat
-        task.wait();
-      until coroutine.status(co) == "dead";
-
-      task.wait(.5);
+      self:selectPage(FocusedPage, false);
+      task.wait(.2);
     end
 
     page.page.Visible = true;
@@ -416,17 +520,16 @@ function library:selectPage(page, enable: boolean)
         BackgroundColor3 = _Color3(220, 220, 220),
         TextColor3 = _Color3(10, 10, 10),
       }
+    })
+    Tween({
+      instance = page.page,
+      properties = {
+        Size = UDim2(0.75, -10, 1, -10)
+      },
+      info = TweenInfo.new(0.2)
     }).Completed:Connect(function()
-      Tween({
-        instance = page.page,
-        properties = {
-          Size = UDim2(0.75, -10, 1, -10)
-        },
-        info = TweenInfo.new(0.2)
-      }).Completed:Connect(function()
-        -- resize
-        page:Resize(true);
-      end)
+      -- resize
+      page:Resize(true);
     end)
 
   else
@@ -437,19 +540,22 @@ function library:selectPage(page, enable: boolean)
         BackgroundColor3 = _Color3(25, 25, 25),
         TextColor3 = _Color3(255, 255, 255),
       }
+    })
+    self.lastPosition = page.page.CanvasPosition.Y;
+    Tween({
+      instance = page.page,
+      info = TweenInfo.new(0.2),
+      properties = {
+        Size = UDim2(0.75, -10, 0, 0),
+      }
     }).Completed:Connect(function()
-      self.lastPosition = page.page.CanvasPosition.Y;
-      Tween({
-        instance = page.page,
-        info = TweenInfo.new(0.2),
-        properties = {
-          Size = UDim2(0.75, -10, 0, 0),
-        }
-      }).Completed:Connect(function()
-        -- resize
-        page:Resize(false);
-      end)
+      -- resize
+      page:Resize(false);
     end)
+
+
+    task.wait(.2);
+    return true;
   end
 end
 
@@ -490,7 +596,7 @@ function page:createModuleHeader(data, properties: table)
       Size = UDim2(1, 0, 0, 30),
       Font = Enum.Font.SourceSans,
       Text = data.description or library_codes.MODULE_UNKNOWN_DESCRIPTIONN,
-      TextColor3 = _Color3(140, 140, 140),
+      TextColor3 = themes.ModuleDescriptionColor,
       TextSize = 14,
       TextXAlignment = Enum.TextXAlignment.Left,
       TextYAlignment = Enum.TextYAlignment.Top,
@@ -784,7 +890,7 @@ function page:updateDropdown(dropdownInstance: Frame, list, callback)
 
     for _, Value in pairs (list or {}) do
       local button: TextButton = CreateInstance("TextButton", {
-        BackgroundColor3 = _Color3(35, 35, 35),
+        BackgroundColor3 = themes.ModuleButtonColor,
         Size = UDim2(0.9, 0, 0, 30),
         Font = Enum.Font.SourceSansSemibold,
         Text = Value or "Dropdown Item",
@@ -907,6 +1013,7 @@ function page:addColorpicker(data: ColorpickerType)
   self.library.popups = self.library.popups or {};
   local popups = self.library.popups;
   local callback = typeof(data.callback) and data.callback or function (v) end;
+  local default = typeof(data.default) == "Color3" and data.default or Color3.fromRGB(0, 0, 0);
   local active = false;
 
   local colorpicker = CreateInstance("Frame", {
@@ -921,7 +1028,7 @@ function page:addColorpicker(data: ColorpickerType)
     }),
     CreateInstance("TextButton", {
       AnchorPoint = Vector2(0, 0.5),
-      BackgroundColor3 = data.default or _Color3(255, 255, 255),
+      BackgroundColor3 = default,
       Position = UDim2(0.9, 0, 0.5, 0),
       Size = UDim2(0, 35, 0, 35),
       Text = "",
@@ -1165,6 +1272,7 @@ function page:addColorpicker(data: ColorpickerType)
       HueDown = false;
       SVdown = false;
     end)
+    self:updateColorpicker(colorpicker, popup, default);
 
     SV.MouseButton1Down:Connect(function()
       SVdown = true;
@@ -1177,9 +1285,8 @@ function page:addColorpicker(data: ColorpickerType)
 
         self:updateColorpicker(colorpicker, popup, color);
 
-        local res = HsvToRgb(color[1], color[2], color[3]);
-
-        callback(Color3.new(res.r, res.g, res.b));
+        local res = HsvToRgb(color[1], X, 1 - Y);
+        callback(Color3.fromRGB(res.r, res.g, res.b));
         RunService.RenderStepped:Wait();
       end
     end)
@@ -1194,9 +1301,9 @@ function page:addColorpicker(data: ColorpickerType)
 
         color = { Y, color[2], color[3] }
 
-        local res = HsvToRgb(color[1], color[2], color[3]);
+        local res = HsvToRgb(Y, color[2], color[3]);
 
-        callback(Color3.new(res.r, res.g, res.b));
+        callback(Color3.fromRGB(res.r, res.g, res.b));
         RunService.RenderStepped:Wait();
       end
     end)
@@ -1307,10 +1414,6 @@ local tab_1 = testing:addPage({
   title = "Hello"
 });
 
-local tab_2 = testing:addPage({
-  title = "hlhlhlhlhlh"
-})
-
 tab_1:addButton({
   title = "Kill All",
   desc = "Kill All People in game.",
@@ -1370,9 +1473,4 @@ tab_1:addKeybind({
   end
 })
 
-tab_2:addButton({
-  title = "lmao",
-  callback = function()
-    print("shi tass");
-  end
-})
+testing:addSettingsPage();
